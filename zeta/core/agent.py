@@ -1,114 +1,147 @@
-from typing import Generator
+from zeta.core.system.config_manager import ConfigManager
 from zeta.core.llm.model_manager import ModelManager
 from zeta.core.memory.memory_manager import MemoryManager
-from zeta.core.system.config_manager import ConfigManager
-from zeta.core.tools.file_manager import FileManager
-from zeta.core.skills.summarizer import Summarizer
-from zeta.core.skills.note_taker import NoteTaker
-from zeta.core.skills.market_analyst import MarketAnalyst
+from zeta.core.tools.tool_manager import ToolManager
 from zeta.core.skills.web_researcher import WebResearcher
-from zeta.core.skills.web_scraper import WebScraper
-from zeta.core.system.system_manager import SystemManager
+from zeta.core.skills.note_taker import NoteTaker
+from zeta.core.tools.system_tool import SystemTool
 from zeta.core.safety.security_manager import SecurityManager
-from zeta.core.brain.intent_router import IntentRouter
+from zeta.core.safety.audit_log import AuditLog
 from zeta.utils.logger import logger
+import json
 
-class Agent:
-    def __init__(self, config_manager: ConfigManager):
-        self.config = config_manager
-        
-        # Security First
-        self.security_manager = SecurityManager(self.config)
-        
+class ZetaAgent:
+    def __init__(self):
+        self.config = ConfigManager()
         self.model_manager = ModelManager(self.config)
-        self.memory_manager = MemoryManager(self.config)
+        self.memory_manager = MemoryManager()
+        self.tool_manager = ToolManager()
         
-        # Tools & Skills
-        self.file_manager = FileManager(self.config, self.security_manager)
-        self.summarizer = Summarizer(self.model_manager, self.file_manager)
-        self.note_taker = NoteTaker(self.file_manager, self.memory_manager)
+        # Register Skills
+        self.web_researcher = WebResearcher()
+        self.note_taker = NoteTaker()
+        self.system = SystemTool()
         
-        self.market_analyst = MarketAnalyst(self.security_manager)
-        self.web_researcher = WebResearcher(self.security_manager)
-        self.web_scraper = WebScraper(self.security_manager)
+        self.tool_manager.register_tool("search_web", self.web_researcher.search_web)
+        self.tool_manager.register_tool("create_note", self.note_taker.create_note)
+        self.tool_manager.register_tool("read_note", self.note_taker.read_note)
+        self.tool_manager.register_tool("list_notes", self.note_taker.list_notes)
+        self.tool_manager.register_tool("list_dir", self.system.list_dir)
+        self.tool_manager.register_tool("read_file", self.system.read_file)
+
+        # Security
+        self.security_manager = SecurityManager(risk_tolerance=self.config.get("safety.risk_tolerance", "SAFE"))
+        self.audit_log = AuditLog()
+
+    def run(self, user_input: str) -> str:
+        """
+        Main Agent Loop:
+        1. Retrieve Context
+        2. Plan (Thought)
+        3. Act (Tool Call) or Answer
+        """
+        logger.info(f"User Input: {user_input}")
         
-        # System Control
-        self.system_manager = SystemManager(self.security_manager)
+        # 1. Retrieve Context
+        context_data = self.memory_manager.get_context(user_input)
+        history_str = "\n".join([f"{t['role']}: {t['content']}" for t in context_data['history']])
+        memories_str = "\n".join(context_data['memories'])
         
-        # Intelligence
-        self.intent_router = IntentRouter(self.model_manager)
-        
-        self.system_prompt = "You are Zeta, a local, privacy-first AI agent. " \
-                           "Answer the user's questions helpfully. " \
-                           "Use the provided context to inform your answers."
+        tools_schema = json.dumps(self.tool_manager.get_tool_schemas(), indent=2)
 
-    def process(self, user_input: str) -> Generator[str, None, None]:
-        # Intelligent Routing
-        intent, payload = self.intent_router.route(user_input)
-        
-        logger.info(f"Intent Detected: {intent} (Payload: {payload})")
+        # 2. Construct Prompt (ReAct Style)
+        prompt = f"""
+You are Zeta, an autonomous local AI agent.
+Your goal is to help the user by using the available tools.
 
-        # 1. SEARCH
-        if intent == "SEARCH":
-            if not payload: 
-                yield "What would you like me to search for?"
-                return
-            yield from self.web_researcher.search(payload)
-            return
+TOOLS AVAILABLE:
+{tools_schema}
 
-        # 2. STOCK
-        if intent == "STOCK":
-            yield self.market_analyst.get_stock_price(payload)
-            return
+CONTEXT (Long-term Memories):
+{memories_str}
 
-        # 3. BROWSE / VISIT
-        if intent == "BROWSE":
-            content = self.web_scraper.read_page(payload)
-            yield f"Content from {payload}:\n\n{content[:2000]}...\n[Truncated]"
-            return
+CONVERSATION HISTORY:
+{history_str}
 
-        # 4. SYSTEM
-        if intent == "SYSTEM":
-            # Direct system command execution (Risk High)
-            yield self.system_manager.run_command(payload)
-            return
+USER INPUT: {user_input}
 
-        # 5. NOTE
-        if intent == "NOTE":
-            if ":" in payload:
-                title, body = payload.split(":", 1)
+INSTRUCTIONS:
+- If you need to use a tool, respond with a JSON object: {{"tool": "tool_name", "args": {{...}}}}
+- If you can answer directly, just respond with the answer.
+- Do NOT make up facts. Use the tools.
+"""
+
+        # 3. Call LLM
+        response = self.model_manager.generate(prompt, stream=False)
+        logger.info(f"LLM Response: {response}")
+
+        # 4. Check for Tool Call (Simple Heuristic for V1)
+        # In a real system, we'd use function calling API or strict JSON parsing
+        try:
+            if "{" in response and "}" in response and "tool" in response:
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                json_str = response[start:end]
+                tool_call = json.loads(json_str)
+                
+                tool_name = tool_call.get("tool")
+                args = tool_call.get("args", {})
+                
+                # --- SECURITY CHECK ---
+                risk = self.security_manager.assess_risk(tool_name, args)
+                if self.security_manager.requires_confirmation(tool_name, args):
+                    # For CLI interaction, we'll simply print and ask for input
+                    # In a real async/web app, this would need a callback system or state machine
+                    print(f"\n[⚠️ SECURITY ALERT] Agent wants to execute: {tool_name}")
+                    print(f"Arguments: {args}")
+                    print(f"Risk Level: {risk.value}")
+                    user_approval = input(">>> Allow this action? (y/n): ").strip().lower()
+                    
+                    if user_approval != 'y':
+                        print("🚫 Action Denied.")
+                        self.audit_log.log_action(tool_name, args, risk.value, "DENIED", "User declined")
+                        
+                        # Feed denial back to LLM
+                        denial_prompt = f"""
+{prompt}
+
+AGENT ACTION: Performed security check for {tool_name}.
+OBSERVATION: User DENIED the action.
+"""
+                        final_response = self.model_manager.generate(denial_prompt, stream=False)
+                        self.memory_manager.save_turn("user", user_input)
+                        self.memory_manager.save_turn("assistant", final_response, metadata={"tool_denied": tool_name})
+                        return final_response
+
+                # If Approved or Safe
+                self.audit_log.log_action(tool_name, args, risk.value, "ALLOWED")
+                
+                # Execute Tool
+                tool_result = self.tool_manager.execute_tool(tool_name, **args)
+                
+                # Feed result back to LLM
+                follow_up_prompt = f"""
+{prompt}
+
+AGENT ACTION: Called {tool_name} with {args}
+Observation: {tool_result}
+
+Final Answer:
+"""
+                final_response = self.model_manager.generate(follow_up_prompt, stream=False)
+                
+                # Save Interaction
+                self.memory_manager.save_turn("user", user_input)
+                self.memory_manager.save_turn("assistant", final_response, metadata={"tool_used": tool_name})
+                
+                return final_response
+
             else:
-                title = "Quick Note"
-                body = payload
-            result = self.note_taker.create_note(title.strip(), body.strip())
-            yield result
-            return
-            
-        # 6. DIRECT (Legacy / commands)
-        if intent == "DIRECT":
-            # Basic fallback for direct /commands if router yields DIRECT
-            cmd = user_input.lower()
-            if cmd.startswith("/ls"):
-                files = self.file_manager.list_directory()
-                yield "Files in workspace:\n" + "\n".join(files)
-                return
-            # ... other manual overrides if needed ...
+                # Direct Answer
+                self.memory_manager.save_turn("user", user_input)
+                self.memory_manager.save_turn("assistant", response)
+                return response
 
-        # 7. CHAT (Default)
-        # Verify if it's a direct command escaping the router (e.g. /ls)
-        if user_input.startswith("/"):
-             # Fallback to legacy handling just in case
-             if user_input.startswith("/ls"):
-                files = self.file_manager.list_directory()
-                yield "Files in workspace:\n" + "\n".join(files)
-                return
-
-        context = self.memory_manager.get_context(user_input)
-        full_prompt = f"{self.system_prompt}\n\nContext:\n{context}\n\nUser: {user_input}\nAgent:"
-        
-        response_accumulator = ""
-        for chunk in self.model_manager.generate(full_prompt):
-            response_accumulator += chunk
-            yield chunk
-            
-        self.memory_manager.save_interaction(user_input, response_accumulator)
+        except Exception as e:
+            logger.error(f"Error in Agent Loop: {e}")
+            return f"I encountered an error: {e}"

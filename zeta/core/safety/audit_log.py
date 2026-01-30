@@ -1,26 +1,24 @@
-import logging
+import os
+import json
 from datetime import datetime
-from pathlib import Path
-from zeta.core.system.config_manager import ConfigManager
+from typing import Dict, Any
 
-class AuditLogger:
-    def __init__(self, config: ConfigManager):
-        self.config = config
-        self.log_path = Path(self.config.get("system.storage_path", "./storage/data")) / "audit.log"
-        # Ensure directory exists
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self._setup_logger()
+class AuditLog:
+    LOG_FILE = "./storage/logs/audit.jsonl"
 
-    def _setup_logger(self):
-        self.logger = logging.getLogger("audit")
-        self.logger.setLevel(logging.INFO)
-        # Ensure only one handler
-        if not self.logger.handlers:
-            fh = logging.FileHandler(self.log_path)
-            formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
-            fh.setFormatter(formatter)
-            self.logger.addHandler(fh)
+    def __init__(self):
+        os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
 
-    def log_action(self, action: str, resource: str, risk: str, approved: bool):
-        status = "APPROVED" if approved else "DENIED"
-        self.logger.info(f"{status} | Action: {action} | Resource: {resource} | Risk: {risk}")
+    def log_action(self, tool_name: str, args: Dict[str, Any], risk: str, status: str, user_reason: str = None):
+        """Logs an action to the audit file."""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "tool": tool_name,
+            "args": args,
+            "risk": risk,
+            "status": status,  # ALLOWED / DENIED
+            "user_reason": user_reason
+        }
+        
+        with open(self.LOG_FILE, "a") as f:
+            f.write(json.dumps(entry) + "\n")

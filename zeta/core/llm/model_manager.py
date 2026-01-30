@@ -36,16 +36,20 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Failed to pull model {model_name}: {e}")
 
-    def generate(self, prompt: str, model: str = None, stream: bool = True) -> Generator[str, None, None]:
+    def generate(self, prompt: str, model: str = None, stream: bool = True):
         target_model = model or self.current_model
         logger.debug(f"Generating with model: {target_model}")
         try:
             response = self.client.generate(model=target_model, prompt=prompt, stream=stream)
             if stream:
-                for chunk in response:
-                    yield chunk['response']
+                # Return a generator
+                def stream_generator():
+                    for chunk in response:
+                        yield chunk['response']
+                return stream_generator()
             else:
-                yield response['response']
+                # Return the full string
+                return response['response']
         except Exception as e:
             logger.error(f"Generation failed: {e}")
-            yield f"Error: {str(e)}"
+            return f"Error: {str(e)}"

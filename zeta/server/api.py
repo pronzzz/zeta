@@ -1,98 +1,67 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict, Any, List
 from pydantic import BaseModel
-from typing import List, Optional
 import uvicorn
-import asyncio
-from zeta.core.agent import Agent
-from zeta.core.system.config_manager import ConfigManager
-from zeta.utils.logger import logger
+import threading
 
-# Initialize App & Agent
-app = FastAPI(title="Zeta Web API", description="Backend for Zeta Agent One UI")
+# Import Core Components
+from zeta.core.agent import ZetaAgent
+from zeta.core.safety.security_manager import RiskLevel
 
-# CORS (Allow local frontend)
+app = FastAPI(title="Zeta API", version="1.0")
+
+# CORS for React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In prod, restrict to localhost:3000/5173
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-config = ConfigManager()
-agent = Agent(config)
+# Initialize Agent (Singleton)
+agent = ZetaAgent()
 
 class ChatRequest(BaseModel):
     message: str
 
-class ChatResponse(BaseModel):
-    response: str
-    intent: Optional[str] = None
+class SkillResponse(BaseModel):
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+    risk_level: str
+    enabled: bool
 
 @app.get("/")
 def read_root():
-    return {"status": "Zeta Online", "version": "1.0"}
+    return {"status": "Zeta is running"}
 
-@app.post("/chat")
-async def chat(request: ChatRequest):
-    """
-    Process a user message and return the agent's response.
-    Non-streaming for V1 simplicity.
-    """
-    user_input = request.message
-    try:
-        # Agent.process returns a generator. We'll consume it fully.
-        full_response = ""
-        for chunk in agent.process(user_input):
-            full_response += chunk
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    """Chat endpoint."""
+    response = agent.run(request.message)
+    return {"response": response}
+
+@app.get("/api/skills", response_model=List[SkillResponse])
+def get_skills():
+    """Returns list of available skills with risk info."""
+    metadata = agent.tool_manager.get_tools_metadata()
+    skills = []
+    
+    for tool in metadata:
+        name = tool['name']
+        risk = agent.security_manager.assess_risk(name, {})
         
-        return {"response": full_response}
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/history")
-def get_history():
-    """
-    Fetch recent conversation history from Memory.
-    """
-    try:
-        # Assuming we can access SQLStore securely
-        # Using a slight hack to get global history via the private method we added
-        logs = agent.memory_manager.sql_store.get_recent_history(None, limit=20)
-        return [
-            {"role": log.role, "content": log.content, "timestamp": log.timestamp}
-            for log in reversed(logs)
-        ]
-    except Exception as e:
-        logger.error(f"History error: {e}")
-        return []
-
-@app.get("/stats")
-def get_stats():
-    """
-    Returns system stats and agent memory count.
-    """
-    from zeta.core.system.spec_analyzer import SpecAnalyzer
-    try:
-        specs = SpecAnalyzer.get_system_specs()
-        # Count memories
-        conn = agent.memory_manager.sql_store._get_conn()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM conversation_logs")
-        count = cursor.fetchone()[0]
-        conn.close()
-        
-        return {
-            "cpu_cores": specs['cpu']['physical_cores'],
-            "ram_total": specs['memory']['total_gb'],
-            "memory_count": count,
-            "model": agent.model_manager.current_model
-        }
-    except Exception as e:
-        logger.error(f"Stats error: {e}")
-        return {"error": str(e)}
+        # In a real app, 'enabled' might be stored in a db
+        skills.append({
+            "name": name,
+            "description": tool['description'],
+            "parameters": tool['parameters'],
+            "risk_level": risk.value,
+            "enabled": True 
+        })
+    return skills
 
 def start_server():
     uvicorn.run(app, host="0.0.0.0", port=8000)

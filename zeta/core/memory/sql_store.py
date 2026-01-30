@@ -1,86 +1,80 @@
 import sqlite3
-from typing import List, Optional
-from zeta.core.memory.data_models import ConversationLog
-from zeta.core.system.config_manager import ConfigManager
-from zeta.utils.logger import logger
+import json
 from datetime import datetime
+from typing import List, Dict, Any, Optional
+import os
+from zeta.utils.logger import logger
+from zeta.core.memory.data_models import ConversationTurn, ConversationSession
 
 class SQLStore:
-    def __init__(self, config: ConfigManager):
-        self.config = config
-        self.db_path = self.config.get("system.storage_path", "./storage/data") + "/zeta_memory.db"
-        self._init_db()
+    def __init__(self, db_path: str = "./storage/zeta.db"):
+        self.db_path = db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.create_tables()
+        logger.info(f"SQLStore connected to {db_path}")
 
-    def _get_conn(self):
-        conn = sqlite3.connect(str(self.db_path))
-        # Enable WAL mode for concurrency (CLI + Server)
-        conn.execute("PRAGMA journal_mode=WAL;")
-        return conn
-
-    def _init_db(self):
-        try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS conversation_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT,
-                    role TEXT,
-                    content TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Failed to init SQL DB: {e}")
-
-    def log_interaction(self, log: ConversationLog):
-        try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO conversation_logs (session_id, role, content)
-                VALUES (?, ?, ?)
-            """, (log.session_id, log.role, log.content))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Failed to log interaction: {e}")
-
-    def get_recent_history(self, session_id: str = None, limit: int = 5) -> List[ConversationLog]:
-        conn = self._get_conn()
-        cursor = conn.cursor()
+    def create_tables(self):
+        cursor = self.conn.cursor()
         
+        # Conversations table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                role TEXT,
+                content TEXT,
+                timestamp TEXT,
+                session_id TEXT,
+                metadata TEXT
+            )
+        ''')
+        
+        # Commands history table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS command_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                command TEXT,
+                status TEXT,
+                timestamp TEXT,
+                details TEXT
+            )
+        ''')
+        
+        self.conn.commit()
+
+    def log_turn(self, turn: ConversationTurn, session_id: str):
+        """Logs a single conversation turn."""
         try:
-            if session_id:
-                cursor.execute("""
-                    SELECT role, content, timestamp 
-                    FROM conversation_logs 
-                    WHERE session_id = ? 
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                """, (session_id, limit))
-            else:
-                # Global fetch (latest from any session)
-                cursor.execute("""
-                    SELECT role, content, timestamp 
-                    FROM conversation_logs 
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                """, (limit,))
-                
-            rows = cursor.fetchall()
-            logs = []
-            for row in reversed(rows): # Reverse back to chronological order
-                logs.append(ConversationLog(
-                    role=row[0],
-                    content=row[1],
-                    session_id=session_id or "unknown"
-                ))
-            return logs
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO conversations (id, role, content, timestamp, session_id, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    turn.id, 
+                    turn.role, 
+                    turn.content, 
+                    str(turn.timestamp), 
+                    session_id, 
+                    json.dumps(turn.metadata)
+                )
+            )
+            self.conn.commit()
         except Exception as e:
-            logger.error(f"Failed to fetch history: {e}")
+            logger.error(f"Failed to log conversation turn: {e}")
+
+    def get_recent_conversation(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Retrieves the most recent conversation turns."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT role, content, timestamp FROM conversations ORDER BY timestamp DESC LIMIT ?", 
+                (limit,)
+            )
+            rows = cursor.fetchall()
+            # Return in chronological order (oldest -> newest) for context window
+            return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in rows][::-1]
+        except Exception as e:
+            logger.error(f"Failed to retrieve conversation: {e}")
             return []
-        finally:
-            conn.close()
+
+    def close(self):
+        self.conn.close()

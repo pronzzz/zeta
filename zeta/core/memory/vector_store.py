@@ -1,69 +1,67 @@
-try:
-    import chromadb
-except ImportError:
-    chromadb = None
-
-from typing import List, Optional
-from zeta.core.memory.data_models import MemoryItem
+import chromadb
+from chromadb.config import Settings
+from typing import List, Dict, Any, Optional
+import os
 from zeta.utils.logger import logger
-from zeta.core.system.config_manager import ConfigManager
-import uuid
+from zeta.core.memory.data_models import MemoryEntry
 
 class VectorStore:
-    def __init__(self, config: ConfigManager):
-        if not chromadb:
-            logger.error("ChromaDB not installed. Semantic memory disabled.")
-            self.client = None
-            return
-
-        self.config = config
-        self.persist_path = self.config.get("system.storage_path", "./storage/data") + "/vector_db"
+    def __init__(self, storage_path: str = "./storage/chroma"):
+        self.storage_path = storage_path
+        os.makedirs(storage_path, exist_ok=True)
         
-        try:
-            self.client = chromadb.PersistentClient(path=self.persist_path)
-            self.collection = self.client.get_or_create_collection(name="zeta_semantic_memory")
-        except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB: {e}")
-            self.client = None
+        self.client = chromadb.PersistentClient(path=storage_path)
+        
+        # We'll use a collection for facts/memories
+        self.collection = self.client.get_or_create_collection(
+            name="zeta_memories",
+            metadata={"hnsw:space": "cosine"}
+        )
+        logger.info(f"VectorStore initialized at {storage_path}")
 
-    def add_item(self, item: MemoryItem):
-        if not self.client:
-            return
-
+    def add_memory(self, memory: MemoryEntry):
+        """Adds a memory entry to the vector store."""
         try:
             self.collection.add(
-                documents=[item.content],
-                metadatas=[item.metadata],
-                ids=[item.id]
+                documents=[memory.content],
+                metadatas=[{
+                    "category": memory.category, 
+                    "timestamp": str(memory.timestamp),
+                    **memory.metadata
+                }],
+                ids=[memory.id]
             )
+            logger.debug(f"Added memory to vector store: {memory.content[:50]}...")
         except Exception as e:
-            logger.error(f"Failed to add item to vector store: {e}")
+            logger.error(f"Failed to add memory to vector store: {e}")
 
-    def query_similarity(self, query: str, n_results: int = 3) -> List[MemoryItem]:
-        if not self.client:
-            return []
-
+    def search_memories(self, query: str, limit: int = 5, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Searches for semantically similar memories."""
         try:
+            where_filter = {}
+            if category:
+                where_filter["category"] = category
+                
             results = self.collection.query(
                 query_texts=[query],
-                n_results=n_results
+                n_results=limit,
+                where=where_filter if where_filter else None
             )
             
-            items = []
-            if results['documents']:
-                for i in range(len(results['documents'][0])):
-                    # Reconstruct MemoryItem from result
-                    # Note: ChromaDB structure is a bit nested
-                    content = results['documents'][0][i]
-                    metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                    doc_id = results['ids'][0][i]
-                    
-                    items.append(MemoryItem(
-                        id=doc_id,
-                        content=content,
-                        metadata=metadata
-                    ))
-            return items
+            memories = []
+            if results["documents"]:
+                for i, doc in enumerate(results["documents"][0]):
+                    metadata = results["metadatas"][0][i]
+                    memories.append({
+                        "content": doc,
+                        "metadata": metadata,
+                        "distance": results["distances"][0][i] if results["distances"] else None
+                    })
+            
+            return memories
         except Exception as e:
-            logger.error(f"Failed to query vector store: {e}")
+            logger.error(f"Vector search failed: {e}")
             return []
+
+    def count(self) -> int:
+        return self.collection.count()

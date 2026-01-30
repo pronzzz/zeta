@@ -1,62 +1,38 @@
-import sys
-import os
-import shutil
-from pathlib import Path
-
-# Add project root to path
-sys.path.append(os.getcwd())
-
 from zeta.core.memory.memory_manager import MemoryManager
-from zeta.core.system.config_manager import ConfigManager
-from zeta.core.memory.data_models import ConversationLog
+from zeta.utils.logger import setup_logger
+import time
 
-def test_memory_system():
-    print("\n--- Testing Memory System ---")
+def verify_memory_system():
+    setup_logger()
+    print("--- Starting Phase 2 Verification ---")
     
-    # Setup test config
-    config = ConfigManager()
-    # Use a separate test DB path if possible, but for now we use default
-    # creating a temporary config might be cleaner but let's stick to simple integration test
+    mm = MemoryManager()
     
-    mm = MemoryManager(config)
-    session_id = mm.current_session_id
-    print(f"Session ID: {session_id}")
+    # 1. Test SQL Store (Conversation History)
+    print("\n[Test 1] Saving conversation turns...")
+    mm.save_turn("user", "Hello Zeta, my name is Pranav.")
+    mm.save_turn("assistant", "Hello Pranav! Nice to meet you.")
     
-    # 1. Test Saving Interaction
-    user_input = "My favorite programming language is Python."
-    agent_response = "That's great! Python is very versatile."
+    # 2. Test Vector Store (Long-term Memory)
+    print("\n[Test 2] Saving long-term memory...")
+    mm.save_memory("User's name is Pranav", category="user_profile")
+    mm.save_memory("User likes coding in Python", category="user_profile")
     
-    print("Saving interaction...")
-    mm.save_interaction(user_input, agent_response)
+    # Allow some time for vector indexing if needed
+    time.sleep(1)
     
-    # 2. Test SQL Retrieval (History)
-    print("Testing SQL History Retrieval...")
-    history = mm.sql_store.get_recent_history(session_id)
-    if len(history) >= 2:
-        print("  ✅ SQL History retrieved successfully.")
-        print(f"  Last User Input: {history[-2].content}")
+    # 3. Test Retrieval
+    print("\n[Test 3] Retrieving context for 'Who am I?'...")
+    context = mm.get_context("Who is Pranav?")
+    
+    print("\n--- Context Retrieved ---")
+    print(f"Recent History: {len(context['history'])} turns")
+    print(f"Relevant Memories: {context['memories']}")
+    
+    if "User's name is Pranav" in context['memories'] or any("Pranav" in m for m in context['memories']):
+        print("\n✅ SUCCESS: Retrieved relevant memory!")
     else:
-        print("  ❌ SQL History retrieval failed.")
-
-    # 3. Test Vector Retrieval (Context)
-    # ChromaDB updates might take a split second, or be immediate. 
-    # We'll try to query for "programming language"
-    print("Testing Vector Context Retrieval...")
-    query = "What do I like to code in?"
-    context = mm.get_context(query)
-    
-    print(f"Context retrieved:\n{context}")
-    
-    if "Python" in context:
-        print("  ✅ Semantic retrieval successful (found 'Python').")
-    else:
-        print("  ⚠️ Semantic retrieval might be delayed or failed.")
-
-    print("\nMemory System Verification Complete.")
+        print("\n❌ FAILURE: Did not retrieve relevant memory.")
 
 if __name__ == "__main__":
-    if "chromadb" not in sys.modules:
-        import chromadb # Just to ensure it loads
-        print(f"ChromaDB Version: {chromadb.__version__}")
-        
-    test_memory_system()
+    verify_memory_system()

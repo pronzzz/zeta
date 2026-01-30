@@ -6,12 +6,6 @@ ollama
 cryptography
 pydantic
 chromadb
-sentence-transformers
-yfinance
-duckduckgo-search
-requests
-playwright
-beautifulsoup4
+ddgs
 fastapi
 uvicorn
-python-multipart
