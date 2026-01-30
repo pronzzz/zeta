@@ -1,0 +1,17 @@
+typer
+rich
+psutil
+pyyaml
+ollama
+cryptography
+pydantic
+chromadb
+sentence-transformers
+yfinance
+duckduckgo-search
+requests
+playwright
+beautifulsoup4
+fastapi
+uvicorn
+python-multipart

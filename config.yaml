@@ -1,0 +1,11 @@
+llm:
+  host: http://localhost:11434
+  model: deepseek-r1:8b
+  timeout: 30
+safety:
+  require_confirmation: true
+  risk_tolerance: low
+system:
+  encryption_enabled: true
+  log_level: INFO
+  storage_path: /Users/pranavdwivedi/Public/Coding Projects/agi-magic/storage/data
