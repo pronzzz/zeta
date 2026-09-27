@@ -8,6 +8,7 @@ from zeta.core.tools.system_tool import SystemTool
 from zeta.core.safety.security_manager import SecurityManager
 from zeta.core.safety.audit_log import AuditLog
 from zeta.utils.logger import logger
+from zeta.core.skills.mcp_retail_client import RetailMCPClient
 import json
 
 class ZetaAgent:
@@ -21,6 +22,7 @@ class ZetaAgent:
         self.web_researcher = WebResearcher()
         self.note_taker = NoteTaker()
         self.system = SystemTool()
+        self.retail_mcp = RetailMCPClient()
         
         self.tool_manager.register_tool("search_web", self.web_researcher.search_web)
         self.tool_manager.register_tool("create_note", self.note_taker.create_note)
@@ -28,6 +30,9 @@ class ZetaAgent:
         self.tool_manager.register_tool("list_notes", self.note_taker.list_notes)
         self.tool_manager.register_tool("list_dir", self.system.list_dir)
         self.tool_manager.register_tool("read_file", self.system.read_file)
+        self.tool_manager.register_tool("check_stock_level", self.retail_mcp.check_stock_level)
+        self.tool_manager.register_tool("flag_slow_movers", self.retail_mcp.flag_slow_movers)
+        self.tool_manager.register_tool("draft_restock_suggestion", self.retail_mcp.draft_restock_suggestion)
 
         # Security
         self.security_manager = SecurityManager(risk_tolerance=self.config.get("safety.risk_tolerance", "SAFE"))

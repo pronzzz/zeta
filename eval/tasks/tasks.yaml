@@ -23,3 +23,13 @@ tasks:
     input: "Read the config.yaml file."
     expected_skill: "read_file"
     pass_criteria: "contains contents of config.yaml"
+
+  - id: 6
+    input: "Check the stock level of SKU 4471 at Belconnen store."
+    expected_skill: "check_stock_level"
+    pass_criteria: "response contains on_hand_qty"
+
+  - id: 7
+    input: "Draft a restock suggestion for SKU 4471 at Belconnen."
+    expected_skill: "draft_restock_suggestion"
+    pass_criteria: "response contains a restock email draft"
