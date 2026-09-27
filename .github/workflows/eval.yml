@@ -1,0 +1,36 @@
+name: Zeta Agent Evaluation
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install duckduckgo-search
+
+    - name: Install Ollama
+      run: |
+        curl -fsSL https://ollama.com/install.sh | sh
+        ollama serve &
+        sleep 5
+        # We use a very tiny model for CI to save time, or deepseek-r1:8b if required
+        ollama pull deepseek-r1:8b
+
+    - name: Run Evals (Phase 9)
+      run: |
+        python verify_phase9.py

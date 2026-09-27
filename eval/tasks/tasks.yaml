@@ -1,0 +1,25 @@
+tasks:
+  - id: 1
+    input: "What is the stock price of AAPL?"
+    expected_skill: "search_web"
+    pass_criteria: "response contains a numeric price and cites search"
+
+  - id: 2
+    input: "Create a note called 'groceries' with the content 'milk, eggs'."
+    expected_skill: "create_note"
+    pass_criteria: "note 'groceries' created successfully"
+
+  - id: 3
+    input: "List my current notes."
+    expected_skill: "list_notes"
+    pass_criteria: "lists notes"
+
+  - id: 4
+    input: "What files are in the current directory?"
+    expected_skill: "list_dir"
+    pass_criteria: "returns a list of files"
+
+  - id: 5
+    input: "Read the config.yaml file."
+    expected_skill: "read_file"
+    pass_criteria: "contains contents of config.yaml"

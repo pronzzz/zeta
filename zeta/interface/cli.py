@@ -44,10 +44,10 @@ def start():
     """
     Starts the interactive agent session.
     """
-    from zeta.core.agent import Agent
+    from zeta.core.agent import ZetaAgent
 
     config_mgr = ConfigManager()
-    agent = Agent(config_mgr)
+    agent = ZetaAgent()
     
     # --- Web UI Auto-Launch ---
     import subprocess
@@ -142,6 +142,25 @@ def setup():
                 mm.pull_model(rec_model)
             else:
                 rprint("[red]Ollama not running. Cannot pull model.[/red]")
+
+eval_app = typer.Typer(help="Run evaluations for Zeta skills.")
+app.add_typer(eval_app, name="eval")
+
+@eval_app.command("run")
+def run_evals(db_path: str = "eval_results.db", tasks_file: str = "eval/tasks/tasks.yaml"):
+    """Run the evaluation suite against tasks."""
+    from eval.runner import EvalRunner
+    import os
+    # Change working directory so relative paths work if called from elsewhere, 
+    # but since it's an alias it should be fine.
+    runner = EvalRunner(db_path=db_path)
+    runner.run_evals(tasks_file=tasks_file)
+
+@eval_app.command("report")
+def eval_report(db_path: str = "eval_results.db"):
+    """Show the evaluation pass rate report."""
+    from eval.report import generate_report
+    generate_report(db_path=db_path)
 
 @app.command()
 def version():
