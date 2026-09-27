@@ -1,0 +1,12 @@
+[
+  "AWS Cloud Practitioner Notes\n1. Amazon EC2: Elastic Compute Cloud provides scalable computing capacity. Good for hosting applications.\n2. Amazon S3: S",
+  " applications.\n2. Amazon S3: Simple Storage Service provides object storage with 99.999999999% durability.\n3. AWS IAM: Identity and Access Management ",
+  "dentity and Access Management secures access to AWS services.\n4. AWS Lambda: Serverless compute service that runs code in response to events.\n5. Amazo",
+  "n response to events.\n5. Amazon RDS: Relational Database Service supports MySQL, PostgreSQL, etc.\n\nITIL V4 Notes\n1. Service Value System (SVS): The ar",
+  "ice Value System (SVS): The architecture of ITIL v4 describing how components work together to co-create value.\n2. Four Dimensions of Service Manageme",
+  "Dimensions of Service Management: Organizations & People, Information & Technology, Partners & Suppliers, Value Streams & Processes.\n3. Incident Manag",
+  "& Processes.\n3. Incident Management: The practice of minimizing the negative impact of incidents by restoring normal service operation as quickly as p",
+  "vice operation as quickly as possible.\n4. Change Enablement: Ensures that risks are properly assessed and authorized to proceed with changes.\n5. Probl",
+  "proceed with changes.\n5. Problem Management: The practice of reducing the likelihood and impact of incidents by identifying actual and potential cause",
+  "ing actual and potential causes of incidents.\n"
+]

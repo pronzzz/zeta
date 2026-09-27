@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TKT-1000",
+    "type": "escalation",
+    "text": "I've been waiting for 3 days for my restock of 9806 at Belconnen. I demand to speak to a manager."
+  },
+  {
+    "id": "TKT-1001",
+    "type": "fault",
+    "text": "My new 9240 monitor from Belconnen is flickering."
+  },
+  {
+    "id": "TKT-1002",
+    "type": "fault",
+    "text": "My new 5090 monitor from Belconnen is flickering."
+  },
+  {
+    "id": "TKT-1003",
+    "type": "escalation",
+    "text": "I've been waiting for 3 days for my restock of 9418 at Civic. I demand to speak to a manager."
+  },
+  {
+    "id": "TKT-1004",
+    "type": "price_match",
+    "text": "I saw SKU 7189 cheaper at a competitor. Can you match it at Civic?"
+  },
+  {
+    "id": "TKT-1005",
+    "type": "price_match",
+    "text": "I saw SKU 7816 cheaper at a competitor. Can you match it at Belconnen?"
+  },
+  {
+    "id": "TKT-1006",
+    "type": "refund",
+    "text": "I bought SKU 2945 but it arrived broken. I want a refund now!"
+  },
+  {
+    "id": "TKT-1007",
+    "type": "refund",
+    "text": "I bought SKU 9135 but it arrived broken. I want a refund now!"
+  },
+  {
+    "id": "TKT-1008",
+    "type": "refund",
+    "text": "I bought SKU 2349 but it arrived broken. I want a refund now!"
+  },
+  {
+    "id": "TKT-1009",
+    "type": "price_match",
+    "text": "I saw SKU 9450 cheaper at a competitor. Can you match it at Civic?"
+  }
+]

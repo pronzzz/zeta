@@ -9,3 +9,9 @@ chromadb
 ddgs
 fastapi
 uvicorn
+duckduckgo-search
+faker
+mcp
+rank_bm25
+sentence-transformers
+langgraph

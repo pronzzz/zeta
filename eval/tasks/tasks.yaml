@@ -33,3 +33,13 @@ tasks:
     input: "Draft a restock suggestion for SKU 4471 at Belconnen."
     expected_skill: "draft_restock_suggestion"
     pass_criteria: "response contains a restock email draft"
+
+  - id: 8
+    input: "Please process this ticket: My new monitor is broken."
+    expected_skill: "process_ticket"
+    pass_criteria: "response contains Status: and Response:"
+
+  - id: 9
+    input: "Process this ticket: I want a refund right now for SKU 1234."
+    expected_skill: "process_ticket"
+    pass_criteria: "response contains Status:"
